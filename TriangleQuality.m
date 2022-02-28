@@ -16,8 +16,8 @@ end
 theta = acos( tmp );
 
 area = 0.5 * a * b * sin(theta) + 1e-40;             %三角形面积
-% r = 2.0 * area / ( ( a + b + c ) );                  %内切圆半径
-% R = a * b * c / 4.0 / area + 1e-40;                  %外接圆半径
+r = 2.0 * area / ( ( a + b + c ) );                  %内切圆半径
+R = a * b * c / 4.0 / area + 1e-40;                  %外接圆半径
 %
 % quality =   3.0 * r / R;
 
