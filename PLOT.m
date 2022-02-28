@@ -3,6 +3,8 @@ xCoord = Coord(:,1);
 yCoord = Coord(:,2);
 
 fig = gcf;
+clf;
+
 fig.Color = 'white'; hold on;
 len = size(AFT_stack,1);
 for i = 1:len

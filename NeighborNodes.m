@@ -28,4 +28,6 @@ end
 % neighbors(neighbors==0)=[];
 neighbors(count+1:end)=[];
 neighbors = unique(neighbors);
+neighbors = neighbors(randi(length(neighbors)));
+
 end

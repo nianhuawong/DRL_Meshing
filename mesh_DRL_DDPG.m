@@ -5,16 +5,22 @@ actInfo = getActionInfo(env);
 rng(0)
 %%
 % create a network to be used as underlying critic approximator
-statePath = imageInputLayer([obsInfo.Dimension(1) 1 1], 'Normalization', 'none', 'Name', 'state');
-actionPath = imageInputLayer([actInfo.Dimension(1) 1 1], 'Normalization', 'none', 'Name', 'action');
-commonPath = [concatenationLayer(1,2,'Name','concat')
-             quadraticLayer('Name','quadratic')
-             fullyConnectedLayer(1,'Name','StateValue','BiasLearnRateFactor', 0, 'Bias', 0)];
+statePath = [imageInputLayer([obsInfo.Dimension(1) 1 1], 'Normalization', 'none', 'Name', 'state')
+             fullyConnectedLayer(24,'Name','CriticStateFC1')
+             reluLayer('Name','CriticRelu1')
+             fullyConnectedLayer(24,'Name','CriticStateFC2')];
+actionPath = [imageInputLayer([actInfo.Dimension(1) 1 1], 'Normalization', 'none', 'Name', 'action')
+              fullyConnectedLayer(24,'Name','CriticActionFC1')];
+commonPath = [additionLayer(2,'Name','add')
+              reluLayer('Name','CriticCommonRelu')
+              fullyConnectedLayer(1,'Name','output')];
+          
 criticNetwork = layerGraph(statePath);
 criticNetwork = addLayers(criticNetwork, actionPath);
 criticNetwork = addLayers(criticNetwork, commonPath);
-criticNetwork = connectLayers(criticNetwork,'state','concat/in1');
-criticNetwork = connectLayers(criticNetwork,'action','concat/in2');
+criticNetwork = connectLayers(criticNetwork,'CriticStateFC2','add/in1');
+criticNetwork = connectLayers(criticNetwork,'CriticActionFC1','add/in2');
+% plot(criticNetwork)
 
 % set some options for the critic
 criticOpts = rlRepresentationOptions('LearnRate',5e-3,'GradientThreshold',1);
@@ -25,10 +31,14 @@ critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,...
 %%
 actorNetwork = [
     imageInputLayer([4 1 1],'Normalization','none','Name','state')
+    fullyConnectedLayer(24,'Name','ActorFC1')
+    reluLayer('Name','ActorRelu1')
+    fullyConnectedLayer(24,'Name','ActorFC2')
+    reluLayer('Name','ActorRelu2')
     fullyConnectedLayer(2,'Name','Actor')
     ];
-
-actorOpts = rlRepresentationOptions('LearnRate',8e-3,'GradientThreshold',1);
+% plot(layerGraph(actorNetwork))
+actorOpts = rlRepresentationOptions('LearnRate',8e-2,'GradientThreshold',1);
 
 % actor = rlAbstractRepresentation(actorNetwork,obsInfo,actInfo,...
 %     'Observation',{'state'}, 'Action', {'Actor'}, actorOpts);
