@@ -1,6 +1,6 @@
 clear;clc;close all;
-boundaryFile = './boundary_file.cas';
-env = mesh_DRL_env(boundaryFile);
+% boundaryFile = './boundary_file.cas';
+env = mesh_DRL_Action;
 obsInfo = getObservationInfo(env); 
 actInfo = getActionInfo(env);
 rng(0)
@@ -14,7 +14,7 @@ critic = rlValueRepresentation(criticNetwork,obsInfo,'Observation',{'state'},cri
 
 actorNetwork = [
     imageInputLayer([4 1 1],'Normalization','none','Name','state')
-    fullyConnectedLayer(2,'Name','fc')
+    fullyConnectedLayer(4,'Name','fc')
     ];
 
 actorOpts = rlRepresentationOptions('LearnRate',8e-3,'GradientThreshold',1);
