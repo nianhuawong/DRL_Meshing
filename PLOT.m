@@ -2,7 +2,7 @@ function PLOT(AFT_stack, Coord)
 xCoord = Coord(:,1);
 yCoord = Coord(:,2);
 
-fig = figure;
+fig = gcf;
 fig.Color = 'white'; hold on;
 len = size(AFT_stack,1);
 for i = 1:len

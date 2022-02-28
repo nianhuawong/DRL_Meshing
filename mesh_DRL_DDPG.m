@@ -1,21 +1,12 @@
 clear;clc;close all;
-% boundaryFile = './boundary_file.cas';
 env = mesh_DRL_Action;
 obsInfo = getObservationInfo(env); 
 actInfo = getActionInfo(env);
 rng(0)
 %%
-% criticNetwork = [
-%     imageInputLayer([4 1 1],'Normalization','none','Name','state')
-%     fullyConnectedLayer(1,'Name','CriticFC')];
-% 
-% criticOpts = rlRepresentationOptions('LearnRate',8e-3,'GradientThreshold',1);
-% 
-% critic = rlValueRepresentation(criticNetwork,obsInfo,'Observation',{'state'},criticOpts);
-%%
 % create a network to be used as underlying critic approximator
 statePath = imageInputLayer([obsInfo.Dimension(1) 1 1], 'Normalization', 'none', 'Name', 'state');
-actionPath = imageInputLayer([numel(actInfo) 1 1], 'Normalization', 'none', 'Name', 'action');
+actionPath = imageInputLayer([actInfo.Dimension(1) 1 1], 'Normalization', 'none', 'Name', 'action');
 commonPath = [concatenationLayer(1,2,'Name','concat')
              quadraticLayer('Name','quadratic')
              fullyConnectedLayer(1,'Name','StateValue','BiasLearnRateFactor', 0, 'Bias', 0)];
