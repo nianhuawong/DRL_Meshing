@@ -7,8 +7,8 @@ Xmax = RANGE(2);
 Ymin = RANGE(3);
 Ymax = RANGE(4);
 
-flag = 1;
+flag = true;
 if x >= Xmin && x <= Xmax && y >= Ymin && y <= Ymax
-    flag = 0;
+    flag = false;
 end
 end

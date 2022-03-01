@@ -4,8 +4,8 @@ env = mesh_DRL_Action;
 obsInfo = getObservationInfo(env); 
 actInfo = getActionInfo(env);
 rng(0)
-%% 建立critic网络
-L = 64; % number of neurons
+%% 建立critic网络，DQN和DDPG将观察值state和动作值action同时作为Critic输入
+L = 32; % number of neurons
 statePath = [imageInputLayer([obsInfo.Dimension(1) obsInfo.Dimension(2) 1], 'Normalization', 'none', 'Name', 'state')
              fullyConnectedLayer(L,'Name','CriticStateFC1')
              reluLayer('Name','CriticRelu1')
@@ -26,11 +26,13 @@ criticNetwork = connectLayers(criticNetwork,'CriticStateFC2','add/in1');
 criticNetwork = connectLayers(criticNetwork,'CriticActionFC1','add/in2');
 % plot(criticNetwork)
 
-criticOpts = rlRepresentationOptions('LearnRate',5e-3,'GradientThreshold',1);
+% criticOpts = rlRepresentationOptions('LearnRate',5e-3,'GradientThreshold',1);
+criticOpts = rlRepresentationOptions('LearnRate',1e-2,'GradientThreshold',1);
 
 critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,...
     'Observation',{'state'},'Action',{'action'},criticOpts);
-%% 建立actor网络
+
+%% 建立actor网络，将观察state作为输入
 actorNetwork = [
     imageInputLayer([obsInfo.Dimension(1) obsInfo.Dimension(2) 1],'Normalization','none','Name','state')
     fullyConnectedLayer(L,'Name','ActorFC1')
@@ -39,12 +41,13 @@ actorNetwork = [
     reluLayer('Name','ActorRelu2')
     fullyConnectedLayer(L,'Name','ActorFC3')
     reluLayer('Name','ActorRelu3')
-    fullyConnectedLayer(L,'Name','ActorFC4')
-    tanhLayer('Name','ActorTanh')
-    fullyConnectedLayer(actInfo.Dimension(1),'Name','Actor')
+    fullyConnectedLayer(actInfo.Dimension(1),'Name','ActorFC4')
+    tanhLayer('Name','Actor')
+%     fullyConnectedLayer(actInfo.Dimension(1),'Name','Actor')
     ];
 % plot(layerGraph(actorNetwork))
-actorOpts = rlRepresentationOptions('LearnRate',1e-4,'GradientThreshold',1);
+% actorOpts = rlRepresentationOptions('LearnRate',1e-4,'GradientThreshold',1);
+actorOpts = rlRepresentationOptions('LearnRate',1e-2,'GradientThreshold',1);
 actor = rlDeterministicActorRepresentation(actorNetwork,obsInfo,actInfo,...
     'Observation',{'state'}, 'Action', {'Actor'}, actorOpts);
 
@@ -53,7 +56,7 @@ agentOpts = rlDDPGAgentOptions(...
     'TargetSmoothFactor',1e-3,...
     'ExperienceBufferLength',1e6,...
     'DiscountFactor',0.99,...
-    'MiniBatchSize',64);
+    'MiniBatchSize',32);
 agentOpts.NoiseOptions.Variance = 0.6;
 agentOpts.NoiseOptions.VarianceDecayRate = 1e-5;
 

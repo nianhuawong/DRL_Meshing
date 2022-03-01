@@ -1,5 +1,5 @@
 function flag = IsNotCross(node1_base, node2_base, node_test, ...
-    frontCandidate, AFT_stack_sorted, xCoord_AFT, yCoord_AFT,ii)
+    frontCandidate, AFT_stack, xCoord_AFT, yCoord_AFT,ii)
 if node_test == -1 || node1_base == -1 || node2_base == -1
     flag = 0;
 else   
@@ -13,8 +13,8 @@ else
     for i = 1 : nFront
         iFront = frontCandidate(i);
         
-        node1Front = AFT_stack_sorted(iFront,1);
-        node2Front = AFT_stack_sorted(iFront,2);
+        node1Front = AFT_stack(iFront,1);
+        node2Front = AFT_stack(iFront,2);
         
         node1Front_Coord = [xCoord_AFT(node1Front), yCoord_AFT(node1Front)];
         node2Front_Coord = [xCoord_AFT(node2Front), yCoord_AFT(node2Front)];
