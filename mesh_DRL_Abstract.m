@@ -7,7 +7,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
         Grid_stack = [];
         BC_stack0  = [];
         BC_stack   = [];
-        boundaryFile =  './boundary_file.cas';
+        boundaryFile =  './grid/boundary_file.cas';
         Coord0 = [];
         Coord  = [];
         Xmax = 0;
@@ -17,6 +17,11 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
         RANGE = [];
         PenaltyForOutOfDomain = -10;
         PenaltyForCross = -10;
+        RewardForFinishDomain = 100;
+        domainArea = 0;
+        sumArea = 0;
+        isPlot = 1;
+        standardlize = 1;
     end
     
     properties
@@ -47,6 +52,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             this.Xmin = min(this.Coord0(:,1));
             this.Ymin = min(this.Coord0(:,2));
             this.RANGE = [this.Xmin, this.Xmax, this.Ymin, this.Ymax];
+            this.domainArea = 400;            
         end
         
         function initialState = reset(this) 
@@ -54,12 +60,15 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             this.BC_stack = this.BC_stack0;
             this.Coord = this.Coord0;
             
+            if(this.isPlot)
+                PLOT(this.BC_stack, this.Coord);
+            end   
+            
             this.nCells  = 0;
             this.nNodes  = size(this.Coord,1);
             this.nFaces  = size(this.BC_stack,1);
             this.nFronts = size(this.BC_stack,1);
-            
-            PLOT(this.BC_stack, this.Coord);
+            this.sumArea = 0;
             
             BC_stack_sorted = Sort_AFT(this.BC_stack);
             
@@ -71,6 +80,9 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             %初始状态为模板点坐标，维度4x2
             initialState = [this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
             
+            if this.standardlize
+                initialState = Standardlize(initialState);
+            end
             %同时将模板点的标号存起来，后面step时要用
             this.StateIndex = [PL;node1_base;node2_base;PR];
         end
@@ -88,11 +100,19 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             %% 当前观察到的状态
             observation =[this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
             loggedSignals.State = observation;
-            PLOT_FRONT(this.BC_stack, this.Coord(:,1), this.Coord(:,2), 1);
             
+            if(this.isPlot)
+                PLOT_FRONT(this.BC_stack, this.Coord(:,1), this.Coord(:,2), 1);
+            end
             %% 当前状态对应的动作
-            Pbest = action';% action就是输出的新点坐标
-            plot(Pbest(1),Pbest(2),'bo');
+            Pbest = action';% action就是输出的新点坐标 
+            if this.standardlize
+                Pbest = AntiStandardlize( Pbest, this.Coord(node1_base,:), this.Coord(node2_base,:) );
+            end
+            
+            if(this.isPlot)
+                plot(Pbest(1),Pbest(2),'bo');
+            end
             
             %% 计算动作对环境造成的改变，并评估给出奖励
             % 如果Pbest在区域外，则终止
@@ -120,7 +140,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             for i = 1:npoints
                 Vec = this.Coord(i,:) - Pbest;
                 dist = sqrt(Vec*Vec');
-                if dist < base_length * 0.1     %如果输出的新点离现有点非常近，则选择现有点
+                if dist < base_length * 0.2 && i~= node1_base && i~= node2_base   %如果输出的新点离现有点非常近，则选择现有点
                     Pbest = this.Coord(i,:);
                     node_select = i;
                     flag_best = 0;
@@ -130,6 +150,15 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             
             if flag_best == 1   %如果选择了最佳点，则将最佳点坐标加入坐标点序列
                 this.Coord(end+1,:) = Pbest;
+            end
+            
+            %% 判断是否为左单元
+            flag = IsLeftCell(node1_base, node2_base, node_select, this.Coord(:,1), this.Coord(:,2));
+            if flag == 0
+                isdone = true;
+                this.IsDone = isdone;
+                reward = this.PenaltyForCross;
+                return;
             end
             %% 考虑周围的点进行相交性判断，若相交，则终止
             nodeCandidate = NodeCandidate(this.BC_stack, node1_base, node2_base, this.Coord(:,1), this.Coord(:,2), Pbest, 3 * base_length);
@@ -142,21 +171,35 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
                 return;
             end
             
-            %% 若不相交，则更新数据
+            %% 若不相交，则更新数据           
             [this.BC_stack, this.nCells] = UpdateTriCells(this.BC_stack, this.nCells, this.Coord(:,1), this.Coord(:,2), node_select, flag_best);
             
             num_of_new_fronts = size(this.BC_stack,1) - this.nFronts;
-            PLOT_NEW_FRONT(this.BC_stack, this.Coord(:,1), this.Coord(:,2), num_of_new_fronts, flag_best)
+            if(this.isPlot)
+                PLOT_NEW_FRONT(this.BC_stack, this.Coord(:,1), this.Coord(:,2), num_of_new_fronts, flag_best)
+            end
             
             [this.BC_stack, this.Grid_stack, num_deleted_fronts] = DeleteInactiveFront(this.BC_stack, this.Grid_stack);  
             this.nFronts = this.nFronts + num_of_new_fronts - num_deleted_fronts; 
             this.nFaces = this.nFaces + num_of_new_fronts;
             this.nNodes = size(this.Coord,1);
             
-            %% 计算奖励
+            %% 计算奖励            
             quality = TriangleQuality(node1_base, node2_base, node_select, this.Coord(:,1), this.Coord(:,2));
-            reward = power(quality, 2);
+            reward = power(quality, 3);
             
+            %% 考虑加上剩余面积判断，填满计算域则给奖励1
+            elementArea = AreaTriangle(this.Coord(node1_base,:), this.Coord(node2_base,:), this.Coord(node_select,:));
+            this.sumArea = this.sumArea + elementArea;            
+            
+            leftArea = this.domainArea - this.sumArea;           
+            if(leftArea < 1e-9)
+                isdone = true;
+                this.IsDone = isdone;
+                reward = this.RewardForFinishDomain;
+                return;
+            end
+                
             %% 计算下一步的状态
             BC_stack_sorted = Sort_AFT(this.BC_stack);
             node1_base = BC_stack_sorted(1,1);
@@ -168,11 +211,6 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             this.StateIndex = [PL; node1_base; node2_base; PR];
             loggedSignals.State = observation;           
             this.IsDone = false;
-
-            %% 考虑加上剩余面积判断，填满计算域则给奖励1
-            %             if this.nCells == 5
-            %                 reward = ;
-            %             end
         end
     end
 end
