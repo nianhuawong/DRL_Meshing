@@ -7,7 +7,8 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
         BC_stack0  = [];
         BC_stack   = [];
         boundaryFile =  './boundary_file.cas';
-        Coord = [];
+        Coord0 = [];
+        Coord  = [];
         Xmax = 0;
         Xmin = 0;
         Ymax = 0;
@@ -38,19 +39,20 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
         end
         
         function initialize(this)
-            [this.BC_stack0, this.Coord, ~, ~] = read_grid(this.boundaryFile, 0);
+            [this.BC_stack0, this.Coord0, ~, ~] = read_grid(this.boundaryFile, 0);
             
-            this.Xmax = max(this.Coord(:,1));
-            this.Ymax = max(this.Coord(:,2));
-            this.Xmin = min(this.Coord(:,1));
-            this.Ymin = min(this.Coord(:,2));
+            this.Xmax = max(this.Coord0(:,1));
+            this.Ymax = max(this.Coord0(:,2));
+            this.Xmin = min(this.Coord0(:,1));
+            this.Ymin = min(this.Coord0(:,2));
             this.RANGE = [this.Xmin, this.Xmax, this.Ymin, this.Ymax];
-            
-            this.nFaces = size(this.BC_stack0,1);
         end
         
-        function initialState = reset(this)
+        function initialState = reset(this)                        
             this.BC_stack = this.BC_stack0;
+            this.Coord = this.Coord0;
+            
+            this.nFaces = size(this.BC_stack,1);
             
             PLOT(this.BC_stack, this.Coord);
             
@@ -145,7 +147,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             this.nNodes = size(this.Coord,1);
             
             quality = TriangleQuality(node1_base, node2_base, node_select, this.Coord(:,1), this.Coord(:,2));
-            reward = quality;
+            reward = 10*power(quality, 4);
             
             %% 计算下一步的状态
             BC_stack_sorted = Sort_AFT(this.BC_stack);

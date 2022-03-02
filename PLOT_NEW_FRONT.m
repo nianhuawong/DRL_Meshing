@@ -13,10 +13,10 @@ for i = 1:num
 
     if flag_best == 1
 %         plot( xx, yy, '.r-','MarkerSize',14);
-        plot( xx, yy, 'r-');
+        plot( xx, yy, 'r-+');
     else
 %         plot( xx, yy, '.r-','MarkerSize',14);
-        plot( xx, yy, 'b-');
+        plot( xx, yy, 'b-+');
     end
     hold on;
     

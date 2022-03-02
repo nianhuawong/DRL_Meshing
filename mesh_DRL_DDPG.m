@@ -5,7 +5,7 @@ obsInfo = getObservationInfo(env);
 actInfo = getActionInfo(env);
 rng(0)
 %% 建立critic网络，DQN和DDPG将观察值state和动作值action同时作为Critic输入
-L = 32; % number of neurons
+L = 12; % number of neurons
 statePath = [imageInputLayer([obsInfo.Dimension(1) obsInfo.Dimension(2) 1], 'Normalization', 'none', 'Name', 'state')
              fullyConnectedLayer(L,'Name','CriticStateFC1')
              reluLayer('Name','CriticRelu1')
@@ -27,7 +27,7 @@ criticNetwork = connectLayers(criticNetwork,'CriticActionFC1','add/in2');
 % plot(criticNetwork)
 
 % criticOpts = rlRepresentationOptions('LearnRate',5e-3,'GradientThreshold',1);
-criticOpts = rlRepresentationOptions('LearnRate',1e-2,'GradientThreshold',1);
+criticOpts = rlRepresentationOptions('LearnRate',1e-2,'GradientThreshold', 1);
 
 critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,...
     'Observation',{'state'},'Action',{'action'},criticOpts);
@@ -56,9 +56,10 @@ agentOpts = rlDDPGAgentOptions(...
     'TargetSmoothFactor',1e-3,...
     'ExperienceBufferLength',1e6,...
     'DiscountFactor',0.99,...
-    'MiniBatchSize',32);
-agentOpts.NoiseOptions.Variance = 0.6;
-agentOpts.NoiseOptions.VarianceDecayRate = 1e-5;
+    'MiniBatchSize',128,...
+    'SampleTime', 1);
+agentOpts.NoiseOptions.Variance = 5;
+agentOpts.NoiseOptions.VarianceDecayRate = 1e-3;
 
 agent = rlDDPGAgent(actor,critic,agentOpts);
 
@@ -69,7 +70,7 @@ trainOpts = rlTrainingOptions(...
     'Verbose',false,...
     'Plots','training-progress',...
     'StopTrainingCriteria','AverageReward',...
-    'StopTrainingValue',1,...
+    'StopTrainingValue',10,...
     'ScoreAveragingWindowLength',10); 
 
 trainingStats = train(agent,env,trainOpts);
