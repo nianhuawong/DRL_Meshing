@@ -147,7 +147,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             this.nNodes = size(this.Coord,1);
             
             quality = TriangleQuality(node1_base, node2_base, node_select, this.Coord(:,1), this.Coord(:,2));
-            reward = 10*power(quality, 4);
+            reward = power(quality, 2);
             
             %% 计算下一步的状态
             BC_stack_sorted = Sort_AFT(this.BC_stack);
