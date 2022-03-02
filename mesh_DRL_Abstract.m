@@ -3,6 +3,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
         nNodes     = 0;
         nFaces     = 0;
         nCells     = 0;
+        nFronts    = 0;
         Grid_stack = [];
         BC_stack0  = [];
         BC_stack   = [];
@@ -48,11 +49,15 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             this.RANGE = [this.Xmin, this.Xmax, this.Ymin, this.Ymax];
         end
         
-        function initialState = reset(this)                        
+        function initialState = reset(this) 
+            this.Grid_stack = [];
             this.BC_stack = this.BC_stack0;
             this.Coord = this.Coord0;
             
-            this.nFaces = size(this.BC_stack,1);
+            this.nCells  = 0;
+            this.nNodes  = size(this.Coord,1);
+            this.nFaces  = size(this.BC_stack,1);
+            this.nFronts = size(this.BC_stack,1);
             
             PLOT(this.BC_stack, this.Coord);
             
@@ -83,6 +88,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             %% 当前观察到的状态
             observation =[this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
             loggedSignals.State = observation;
+            PLOT_FRONT(this.BC_stack, this.Coord(:,1), this.Coord(:,2), 1);
             
             %% 当前状态对应的动作
             Pbest = action';% action就是输出的新点坐标
@@ -136,16 +142,18 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
                 return;
             end
             
-            %% 若不相交，则更新数据，计算奖励
+            %% 若不相交，则更新数据
             [this.BC_stack, this.nCells] = UpdateTriCells(this.BC_stack, this.nCells, this.Coord(:,1), this.Coord(:,2), node_select, flag_best);
             
-            num_of_new_fronts = size(this.BC_stack,1) - this.nFaces;
+            num_of_new_fronts = size(this.BC_stack,1) - this.nFronts;
             PLOT_NEW_FRONT(this.BC_stack, this.Coord(:,1), this.Coord(:,2), num_of_new_fronts, flag_best)
             
-            [this.BC_stack, this.Grid_stack] = DeleteInactiveFront(this.BC_stack, this.Grid_stack);           
+            [this.BC_stack, this.Grid_stack, num_deleted_fronts] = DeleteInactiveFront(this.BC_stack, this.Grid_stack);  
+            this.nFronts = this.nFronts + num_of_new_fronts - num_deleted_fronts; 
             this.nFaces = this.nFaces + num_of_new_fronts;
             this.nNodes = size(this.Coord,1);
             
+            %% 计算奖励
             quality = TriangleQuality(node1_base, node2_base, node_select, this.Coord(:,1), this.Coord(:,2));
             reward = power(quality, 2);
             
