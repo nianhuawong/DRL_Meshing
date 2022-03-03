@@ -99,6 +99,9 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             
             %% 当前观察到的状态
             observation =[this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
+            if this.standardlize
+                observation = Standardlize(observation);
+            end
             loggedSignals.State = observation;
             
             if(this.isPlot)
@@ -107,22 +110,14 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             %% 当前状态对应的动作
             Pbest = action';% action就是输出的新点坐标 
             if this.standardlize
-                Pbest = AntiStandardlize( Pbest, this.Coord(node1_base,:), this.Coord(node2_base,:) );
+                Pbest = AntiStandardlize(Pbest, this.Coord(node1_base,:), this.Coord(node2_base,:));
             end
             
             if(this.isPlot)
                 plot(Pbest(1),Pbest(2),'bo');
             end
             
-            %% 计算动作对环境造成的改变，并评估给出奖励
-            % 如果Pbest在区域外，则终止
-            if (OutOfDomain(Pbest, this.RANGE))
-                isdone = true;
-                this.IsDone = isdone;
-                reward = this.PenaltyForOutOfDomain;
-                return;
-            end
-            
+            %% 计算动作对环境造成的改变，并评估给出奖励           
             % 如果Pbest离base front很远，则终止
             Vec = Pbest - this.Coord(node1_base,:);
             dist = sqrt(Vec*Vec');
@@ -133,35 +128,50 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
                 return;
             end
             
-            %% 如果Pbest在区域内部
-            npoints = size(this.Coord, 1);
-            node_select = npoints + 1;
+            %% 如果Pbest与现有点很靠近，则选择现有点
+            PSelect = [];
             flag_best = 1;
-            for i = 1:npoints
-                Vec = this.Coord(i,:) - Pbest;
-                dist = sqrt(Vec*Vec');
-                if dist < base_length * 0.2 && i~= node1_base && i~= node2_base   %如果输出的新点离现有点非常近，则选择现有点
-                    Pbest = this.Coord(i,:);
-                    node_select = i;
-                    flag_best = 0;
-                    break;
+            index = PointClose2ExistedPoints(Pbest,this.Coord,node1_base,node2_base);
+            if index > 0
+                node_select = index;
+                PSelect = this.Coord(node_select,:);
+                flag_best = 0;
+                
+                [~, row1] = FrontExist(node1_base,node_select, this.BC_stack);
+                [~, row2] = FrontExist(node2_base,node_select, this.BC_stack);
+                if(row1 < 0 && row2 < 0)
+                    isdone = true;
+                    this.IsDone = isdone;
+                    reward = this.PenaltyForOutOfDomain;
+                    return;
                 end
             end
             
+            %% 如果Pbest在区域外，且不与现有点靠近，则终止
+            if (OutOfDomain(Pbest, this.RANGE) && index < 0)
+                isdone = true;
+                this.IsDone = isdone;
+                reward = this.PenaltyForOutOfDomain;
+                return;
+            end
+            
             if flag_best == 1   %如果选择了最佳点，则将最佳点坐标加入坐标点序列
+                PSelect = Pbest;
                 this.Coord(end+1,:) = Pbest;
+                node_select = size(this.Coord, 1);
             end
             
             %% 判断是否为左单元
-            flag = IsLeftCell(node1_base, node2_base, node_select, this.Coord(:,1), this.Coord(:,2));
-            if flag == 0
+            flag_left_cell = IsLeftCell(node1_base, node2_base, node_select, this.Coord(:,1), this.Coord(:,2));
+            if flag_left_cell == 0
                 isdone = true;
                 this.IsDone = isdone;
                 reward = this.PenaltyForCross;
                 return;
             end
+            
             %% 考虑周围的点进行相交性判断，若相交，则终止
-            nodeCandidate = NodeCandidate(this.BC_stack, node1_base, node2_base, this.Coord(:,1), this.Coord(:,2), Pbest, 3 * base_length);
+            nodeCandidate = NodeCandidate(this.BC_stack, node1_base, node2_base, this.Coord(:,1), this.Coord(:,2), PSelect, 3 * base_length);
             frontCandidate = FrontCandidate(this.BC_stack, nodeCandidate);
             flag_not_cross = IsNotCross(node1_base, node2_base, node_select, frontCandidate, this.BC_stack, this.Coord(:,1), this.Coord(:,2), 0);
             if flag_not_cross == 0
@@ -186,7 +196,11 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             
             %% 计算奖励            
             quality = TriangleQuality(node1_base, node2_base, node_select, this.Coord(:,1), this.Coord(:,2));
-            reward = power(quality, 3);
+            if flag_best == 0
+                quality = quality / 0.8;
+            end
+            
+            reward = power(quality, 1);
             
             %% 考虑加上剩余面积判断，填满计算域则给奖励1
             elementArea = AreaTriangle(this.Coord(node1_base,:), this.Coord(node2_base,:), this.Coord(node_select,:));
@@ -208,6 +222,9 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             PR = NeighborNodes(node2_base, this.BC_stack, node1_base);
             observation =[this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
             
+            if this.standardlize
+                observation = Standardlize(observation);
+            end
             this.StateIndex = [PL; node1_base; node2_base; PR];
             loggedSignals.State = observation;           
             this.IsDone = false;
