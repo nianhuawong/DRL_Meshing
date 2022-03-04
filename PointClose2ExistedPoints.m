@@ -1,6 +1,6 @@
 function index = PointClose2ExistedPoints(Point,Coord,node1_base,node2_base)
 index = -1;
-coeff = 1.0;
+coeff = 0.5;
 
 base_length = DISTANCE(node1_base, node2_base, Coord(:,1), Coord(:,2));
 mindis = 1e40;

@@ -28,10 +28,4 @@ end
 % neighbors(neighbors==0)=[];
 neighbors(count+1:end)=[];
 neighbors = unique(neighbors);
-if(isempty(neighbors))
-    error('neighbors is empty!');  
-else
-    neighbors = neighbors(randi(length(neighbors)));
-end
-
 end

@@ -5,7 +5,7 @@ obsInfo = getObservationInfo(env);
 actInfo = getActionInfo(env);
 rng(0)
 %% 建立critic网络，DQN和DDPG将观察值state和动作值action同时作为Critic输入
-L = 32; % number of neurons
+L = 12; % number of neurons
 statePath = [imageInputLayer([obsInfo.Dimension(1) obsInfo.Dimension(2) 1], 'Normalization', 'none', 'Name', 'state')
              fullyConnectedLayer(L,'Name','CriticStateFC1')
              reluLayer('Name','CriticStateRelu1')
@@ -31,9 +31,8 @@ criticNetwork = connectLayers(criticNetwork,'CriticStateFC3','add/in1');
 criticNetwork = connectLayers(criticNetwork,'CriticActionFC2','add/in2');
 % plot(criticNetwork)
 
-criticOpts = rlRepresentationOptions('LearnRate',5e-3,'GradientThreshold',1);
+criticOpts = rlRepresentationOptions('LearnRate', 5e-3, 'GradientThreshold', 1);%, 'UseDevice',"gpu"
 % criticOpts = rlRepresentationOptions('LearnRate',1e-2,'GradientThreshold', 1);
-% criticOpts = rlRepresentationOptions('UseDevice',"gpu");
 
 critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,...
     'Observation',{'state'},'Action',{'action'},criticOpts);
@@ -71,16 +70,15 @@ agent = rlDDPGAgent(actor,critic,agentOpts);
 
 %% 训练智能体
 averQuality = 0.9;
-episode = 100;
+steps = 100;
 trainOpts = rlTrainingOptions(...
     'MaxEpisodes',10000,...
-    'MaxStepsPerEpisode',episode,...
+    'MaxStepsPerEpisode',steps,...
     'Verbose',true,...
-    'Plots','training-progress',...
+    'Plots','none',...
     'StopTrainingCriteria','AverageReward',...
-    'StopTrainingValue',averQuality * episode,...
-    'ScoreAveragingWindowLength',10, ...
-    'Plots', 'none');  %     "Plots", "training-progress"
+    'StopTrainingValue',averQuality * steps,...
+    'ScoreAveragingWindowLength',10);  %     "Plots", "training-progress"
 %     "UseParallel","true")
 
 %% 是否加载预训练的agent
@@ -93,7 +91,7 @@ end
 doTraining = true;
 if doTraining  
     trainingStats = train(agent,env,trainOpts);
-    save("./agent/finalAgent_"+num2str(episode)+".mat",'agent')
+    save("./agent/finalAgent_"+num2str(steps)+".mat",'agent')
 end
 
 %% 部署智能体

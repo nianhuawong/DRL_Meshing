@@ -74,8 +74,8 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             
             node1_base = BC_stack_sorted(1,1);
             node2_base = BC_stack_sorted(1,2);
-            PL = NeighborNodes(node1_base, this.BC_stack, node2_base);
-            PR = NeighborNodes(node2_base, this.BC_stack, node1_base);
+            PL = FindOneNeighborNode(node1_base, this.BC_stack, node2_base);
+            PR = FindOneNeighborNode(node2_base, this.BC_stack, node1_base);
             
             %初始状态为模板点坐标，维度4x2
             initialState = [this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
@@ -137,9 +137,9 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
                 PSelect = this.Coord(node_select,:);
                 flag_best = 0;
                 
-                [~, row1] = FrontExist(node1_base,node_select, this.BC_stack);
-                [~, row2] = FrontExist(node2_base,node_select, this.BC_stack);
-                if(row1 < 0 && row2 < 0)
+                [~, row1] = FrontExist(node1_base,node_select, this.Grid_stack);
+                [~, row2] = FrontExist(node2_base,node_select, this.Grid_stack);
+                if(row1 > 0 || row2 > 0)
                     isdone = true;
                     this.IsDone = isdone;
                     reward = this.PenaltyForOutOfDomain;
@@ -182,7 +182,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             end
             
             %% 若不相交，则更新数据           
-            [this.BC_stack, this.nCells] = UpdateTriCells(this.BC_stack, this.nCells, this.Coord(:,1), this.Coord(:,2), node_select, flag_best);
+            [this.BC_stack, this.nCells] = UpdateTriCells(this.BC_stack, this.nCells, this.Coord(:,1), this.Coord(:,2), node_select, flag_best); 
             
             num_of_new_fronts = size(this.BC_stack,1) - this.nFronts;
             if(this.isPlot)
@@ -207,7 +207,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             this.sumArea = this.sumArea + elementArea;            
             
             leftArea = this.domainArea - this.sumArea;           
-            if(leftArea < 1e-9)
+            if(leftArea < 1e-9) || isempty(this.BC_stack)
                 isdone = true;
                 this.IsDone = isdone;
                 reward = this.RewardForFinishDomain;
@@ -218,8 +218,8 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             BC_stack_sorted = Sort_AFT(this.BC_stack);
             node1_base = BC_stack_sorted(1,1);
             node2_base = BC_stack_sorted(1,2);
-            PL = NeighborNodes(node1_base, this.BC_stack, node2_base);
-            PR = NeighborNodes(node2_base, this.BC_stack, node1_base);
+            PL = FindOneNeighborNode(node1_base, this.BC_stack, node2_base);
+            PR = FindOneNeighborNode(node2_base, this.BC_stack, node1_base);
             observation =[this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
             
             if this.standardlize
