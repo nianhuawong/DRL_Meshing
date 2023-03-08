@@ -3,58 +3,76 @@ clear;clc;close all;
 env = mesh_DRL_Action;
 obsInfo = getObservationInfo(env); 
 actInfo = getActionInfo(env);
-rng(0)
+rng(now)
 %% 建立critic网络，DQN和DDPG将观察值state和动作值action同时作为Critic输入
-L = 12; % number of neurons
-statePath = [imageInputLayer([obsInfo.Dimension(1) obsInfo.Dimension(2) 1], 'Normalization', 'none', 'Name', 'state')
-             fullyConnectedLayer(L,'Name','CriticStateFC1')
-             reluLayer('Name','CriticStateRelu1')
-             fullyConnectedLayer(L,'Name','CriticStateFC2')
-             reluLayer('Name','CriticStateRelu2')
-             fullyConnectedLayer(L,'Name','CriticStateFC3')];
-actionPath = [imageInputLayer([actInfo.Dimension(1) actInfo.Dimension(2) 1], 'Normalization', 'none', 'Name', 'action')
-              fullyConnectedLayer(L,'Name','CriticActionFC1')
-              reluLayer('Name','CriticActionRelu1')
-              fullyConnectedLayer(L,'Name','CriticActionFC2')
-             ];
-commonPath = [additionLayer(2,'Name','add')
-              reluLayer('Name','CriticCommonRelu1')
-              fullyConnectedLayer(L,'Name','CriticCommonFC1')
-              reluLayer('Name','CriticCommonRelu2')
-              fullyConnectedLayer(1,'Name','output')
-              ];
-          
-criticNetwork = layerGraph(statePath);
-criticNetwork = addLayers(criticNetwork, actionPath);
-criticNetwork = addLayers(criticNetwork, commonPath);
-criticNetwork = connectLayers(criticNetwork,'CriticStateFC3','add/in1');
-criticNetwork = connectLayers(criticNetwork,'CriticActionFC2','add/in2');
-% plot(criticNetwork)
+hiddenLayerSize1 = 400;
+hiddenLayerSize2 = 300; 
 
-criticOpts = rlRepresentationOptions('LearnRate', 5e-3, 'GradientThreshold', 1);%, 'UseDevice',"gpu"
-% criticOpts = rlRepresentationOptions('LearnRate',1e-2,'GradientThreshold', 1);
+imgPath = [imageInputLayer(obsInfo(1).Dimension, 'Normalization', 'none', 'Name', 'image')
+    convolution2dLayer(10, 2,'Name','conv1','Stride', 5, 'Padding',0)
+    reluLayer('Name','relu1')
+    fullyConnectedLayer(2,'Name','fc1')
+    concatenationLayer(3,2,'Name','cat1')
+    fullyConnectedLayer(hiddenLayerSize1,'Name','fc2')
+    reluLayer('Name','relu2')
+    fullyConnectedLayer(hiddenLayerSize2,'Name','fc3')
+    additionLayer(2,'Name','add')
+    reluLayer('Name','relu3')
+    fullyConnectedLayer(1,'Name','fc4')];
+         
+statePath  = [imageInputLayer(obsInfo(2).Dimension, 'Normalization', 'none', 'Name', 'state')
+%               fullyConnectedLayer(L,'Name','state_FC1')
+%               reluLayer('Name','state_Relu1')
+              fullyConnectedLayer(1,'Name','fc5','BiasLearnRateFactor',0,'Bias',0)
+             ];         
+         
+actionPath = [imageInputLayer(actInfo.Dimension, 'Normalization', 'none', 'Name', 'action')
+              fullyConnectedLayer(hiddenLayerSize2,'Name','fc6','BiasLearnRateFactor',0,'Bias',zeros(hiddenLayerSize2,1))
+             ];
+          
+criticNetwork = layerGraph(imgPath);
+criticNetwork = addLayers(criticNetwork,statePath);
+criticNetwork = addLayers(criticNetwork,actionPath);
+criticNetwork = connectLayers(criticNetwork,'fc5','cat1/in2');
+criticNetwork = connectLayers(criticNetwork,'fc6','add/in2');
+plot(criticNetwork)
+
+criticOpts = rlRepresentationOptions('LearnRate', 5e-3, 'GradientThreshold', 1);
+% criticOptions.UseDevice = 'gpu';
 
 critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,...
-    'Observation',{'state'},'Action',{'action'},criticOpts);
+    'Observation',{'image', 'state'},'Action',{'action'}, criticOpts);
 
 %% 建立actor网络，将观察state作为输入
-actorNetwork = [
-    imageInputLayer([obsInfo.Dimension(1) obsInfo.Dimension(2) 1],'Normalization','none','Name','state')
-    fullyConnectedLayer(L,'Name','ActorFC1')
-    reluLayer('Name','ActorRelu1')
-    fullyConnectedLayer(L,'Name','ActorFC2')
-    reluLayer('Name','ActorRelu2')
-    fullyConnectedLayer(L,'Name','ActorFC3')
-    reluLayer('Name','ActorRelu3')
-    fullyConnectedLayer(actInfo.Dimension(1),'Name','ActorFC4')
-    tanhLayer('Name','actorTanh')
-    scalingLayer('Name','actor','Scale', 0.5, 'Bias', 0.5)
+imgPath = [
+    imageInputLayer(obsInfo(1).Dimension,'Normalization','none','Name',obsInfo(1).Name)
+    convolution2dLayer(10,2,'Name','conv1','Stride',5,'Padding',0)
+    reluLayer('Name','relu1')
+    fullyConnectedLayer(2,'Name','fc1')
+    concatenationLayer(3,2,'Name','cat1')
+    fullyConnectedLayer(hiddenLayerSize1,'Name','fc2')
+    reluLayer('Name','relu2')
+    fullyConnectedLayer(hiddenLayerSize2,'Name','fc3')
+    reluLayer('Name','relu3')
+    fullyConnectedLayer(2,'Name','fc4')
+    tanhLayer('Name','tanh1')
+    scalingLayer('Name','scale1','Scale',max(actInfo.UpperLimit))
     ];
-% plot(layerGraph(actorNetwork))
-actorOpts = rlRepresentationOptions('LearnRate',1e-4,'GradientThreshold',1);
-% actorOpts = rlRepresentationOptions('LearnRate',1e-2,'GradientThreshold',1);
-actor = rlDeterministicActorRepresentation(actorNetwork,obsInfo,actInfo,...
-    'Observation',{'state'}, 'Action', {'actor'}, actorOpts);
+actionPath = [
+    imageInputLayer(obsInfo(2).Dimension,'Normalization','none','Name',obsInfo(2).Name)
+    fullyConnectedLayer(1,'Name','fc5','BiasLearnRateFactor',0,'Bias',0)
+    ];
+
+actorNetwork = layerGraph(imgPath);
+actorNetwork = addLayers(actorNetwork,actionPath);
+actorNetwork = connectLayers(actorNetwork,'fc5','cat1/in2');
+plot(actorNetwork)
+
+actorOpts = rlRepresentationOptions('LearnRate',1e-04,'GradientThreshold',1);
+% actorOptions.UseDevice = 'gpu';
+
+actor = rlDeterministicActorRepresentation(actorNetwork, obsInfo, actInfo,...
+    'Observation',{'image' 'state'}, 'Action', {'scale1'}, actorOpts);
 
 %% 建立智能体DDPG agent
 agentOpts = rlDDPGAgentOptions(...   
@@ -63,7 +81,7 @@ agentOpts = rlDDPGAgentOptions(...
     'DiscountFactor',0.99,...
     'MiniBatchSize',64,...
     'SampleTime', 1);
-agentOpts.NoiseOptions.Variance = 0.1;
+agentOpts.NoiseOptions.Variance = 100;
 agentOpts.NoiseOptions.VarianceDecayRate = 1e-6;
 
 agent = rlDDPGAgent(actor,critic,agentOpts);

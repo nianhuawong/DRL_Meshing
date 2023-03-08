@@ -10,36 +10,33 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
         boundaryFile =  './grid/boundary_file.cas';
         Coord0 = [];
         Coord  = [];
-        Xmax = 0;
-        Xmin = 0;
-        Ymax = 0;
-        Ymin = 0;
+        
         RANGE = [];
+        
         PenaltyForOutOfDomain = -10;
         PenaltyForCross = -10;
-        RewardForFinishDomain = 100;
-        domainArea = 0;
-        sumArea = 0;
+
         isPlot = 1;
         standardlize = 1;
     end
     
     properties
-        % system state [L, B1, B2, R]'
         StateIndex = zeros(4,1)
     end
     
     properties(Access = protected)
-        % Internal flag to store stale env that is finished
         IsDone = false
+        lastobs
     end
     
     methods
         function this = mesh_DRL_Abstract(ActionInfo)
-            %% 状态为输入模板点的x,y坐标
-            ObservationInfo = rlNumericSpec([4 2]);
-            ObservationInfo.Name = 'mesh DRL States';
-            ObservationInfo.Description = 'L, B1, B2, R coordinates';
+            ObservationInfo(1) = rlNumericSpec([656 875 3]);
+            ObservationInfo(1).Name = 'image';
+            
+            ObservationInfo(2) = rlNumericSpec([4 2]);
+            ObservationInfo(2).Name = 'state';
+            
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
             initialize(this);
         end
@@ -47,15 +44,10 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
         function initialize(this)
             [this.BC_stack0, this.Coord0, ~, ~] = read_grid(this.boundaryFile, 0);
             
-            this.Xmax = max(this.Coord0(:,1));
-            this.Ymax = max(this.Coord0(:,2));
-            this.Xmin = min(this.Coord0(:,1));
-            this.Ymin = min(this.Coord0(:,2));
-            this.RANGE = [this.Xmin, this.Xmax, this.Ymin, this.Ymax];
-            this.domainArea = 400;            
+            this.RANGE = [min(this.Coord0(:,1)), max(this.Coord0(:,1)), min(this.Coord0(:,2)), max(this.Coord0(:,2))];         
         end
         
-        function initialState = reset(this) 
+        function ObsInfo = reset(this) 
             this.Grid_stack = [];
             this.BC_stack = this.BC_stack0;
             this.Coord = this.Coord0;
@@ -68,7 +60,6 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             this.nNodes  = size(this.Coord,1);
             this.nFaces  = size(this.BC_stack,1);
             this.nFronts = size(this.BC_stack,1);
-            this.sumArea = 0;
             
             BC_stack_sorted = Sort_AFT(this.BC_stack);
             
@@ -77,18 +68,25 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             PL = FindOneNeighborNode(node1_base, this.BC_stack, node2_base);
             PR = FindOneNeighborNode(node2_base, this.BC_stack, node1_base);
             
-            %初始状态为模板点坐标，维度4x2
-            initialState = [this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
+            %初始状态为模板点坐标 
+            state = [this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
             
             if this.standardlize
-                initialState = Standardlize(initialState);
+                state = Standardlize(state);
             end
+            
             %同时将模板点的标号存起来，后面step时要用
             this.StateIndex = [PL;node1_base;node2_base;PR];
+%%
+            image = importdata('./env0.png');
+            
+            ObsInfo = {image, state};
+            this.lastobs = ObsInfo;
         end
         
-        function [observation,reward,isdone,loggedSignals] = step(this,action)
+        function [nextobs,reward,isdone,loggedSignals] = step(this,action)
             loggedSignals = [];
+            nextobs = this.lastobs;
             isdone = false;
             
             PL = this.StateIndex(1);
@@ -97,16 +95,10 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             PR = this.StateIndex(4);
             base_length = DISTANCE(node1_base, node2_base, this.Coord(:,1), this.Coord(:,2));
             
-            %% 当前观察到的状态
-            observation =[this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
-            if this.standardlize
-                observation = Standardlize(observation);
-            end
-            loggedSignals.State = observation;
-            
             if(this.isPlot)
                 PLOT_FRONT(this.BC_stack, this.Coord(:,1), this.Coord(:,2), 1);
             end
+            
             %% 当前状态对应的动作
             Pbest = action';% action就是输出的新点坐标 
             if this.standardlize
@@ -124,7 +116,7 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             if dist > 3 * base_length
                 isdone = true;
                 this.IsDone = isdone;
-                reward = this.PenaltyForOutOfDomain;
+                reward = this.PenaltyForOutOfDomain*dist;
                 return;
             end
             
@@ -202,12 +194,8 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             
             reward = power(quality, 1);
             
-            %% 考虑加上剩余面积判断，填满计算域则给奖励1
-            elementArea = AreaTriangle(this.Coord(node1_base,:), this.Coord(node2_base,:), this.Coord(node_select,:));
-            this.sumArea = this.sumArea + elementArea;            
-            
-            leftArea = this.domainArea - this.sumArea;           
-            if(leftArea < 1e-9) || isempty(this.BC_stack)
+            %% 
+            if(isempty(this.BC_stack))
                 isdone = true;
                 this.IsDone = isdone;
                 reward = this.RewardForFinishDomain;
@@ -220,13 +208,19 @@ classdef (Abstract) mesh_DRL_Abstract < rl.env.MATLABEnvironment
             node2_base = BC_stack_sorted(1,2);
             PL = FindOneNeighborNode(node1_base, this.BC_stack, node2_base);
             PR = FindOneNeighborNode(node2_base, this.BC_stack, node1_base);
-            observation =[this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
-            
+            state =[this.Coord(PL,:);this.Coord(node1_base,:);this.Coord(node2_base,:);this.Coord(PR,:)];
+
             if this.standardlize
-                observation = Standardlize(observation);
+                state = Standardlize(state);
             end
-            this.StateIndex = [PL; node1_base; node2_base; PR];
-            loggedSignals.State = observation;           
+            
+            saveas(gcf,'env.png');
+            image=importdata('./env.png');
+            
+            this.lastobs = nextobs;
+            nextobs = {image, state};
+             
+            this.StateIndex = [PL; node1_base; node2_base; PR];         
             this.IsDone = false;
         end
     end
